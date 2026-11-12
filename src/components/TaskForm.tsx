@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react';
-import type { CreateTaskDto } from '../types/task';
+import type { CreateTaskDto, TaskDate } from '../types/task';
 
 interface TaskFormProps {
   onSubmit: (task: CreateTaskDto) => void;
+  date?: TaskDate;
 }
 
-export function TaskForm({ onSubmit }: TaskFormProps) {
+export function TaskForm({ onSubmit, date }: TaskFormProps) {
   const [title, setTitle] = useState('');
+  const [time, setTime] = useState('');
   const [description, setDescription] = useState('');
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -18,13 +20,18 @@ export function TaskForm({ onSubmit }: TaskFormProps) {
     }
 
     const trimmedDescription = description.trim();
-    const task: CreateTaskDto = { title: trimmedTitle };
+    const task: CreateTaskDto = {
+      title: trimmedTitle,
+      ...(date === undefined ? {} : { date }),
+      ...(time === '' ? {} : { time }),
+    };
     if (trimmedDescription) {
       task.description = trimmedDescription;
     }
 
     onSubmit(task);
     setTitle('');
+    setTime('');
     setDescription('');
   };
 
@@ -49,6 +56,15 @@ export function TaskForm({ onSubmit }: TaskFormProps) {
           placeholder="Например, подготовить отчёт"
           maxLength={120}
           required
+        />
+      </label>
+
+      <label className="form-field">
+        Время <span aria-hidden="true">(необязательно)</span>
+        <input
+          type="time"
+          value={time}
+          onChange={(event) => setTime(event.target.value)}
         />
       </label>
 

@@ -12,6 +12,8 @@ const WEEKDAY_NAMES = [
   'Воскресенье',
 ] as const;
 
+const WEEKDAY_SHORT_NAMES = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'] as const;
+
 export function isTaskDate(value: unknown): value is TaskDate {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
@@ -79,6 +81,51 @@ export function getDateForCurrentWeekday(
   const daysSinceMonday = (startOfWeek.getDay() + 6) % 7;
   startOfWeek.setDate(startOfWeek.getDate() - daysSinceMonday + weekday - 1);
   return getLocalDateString(startOfWeek);
+}
+
+export function getWeekDates(
+  referenceDate: Date = new Date(),
+  weekOffset = 0,
+): TaskDate[] {
+  const monday = new Date(referenceDate);
+  monday.setHours(12, 0, 0, 0);
+  monday.setDate(
+    monday.getDate() - ((monday.getDay() + 6) % 7) + weekOffset * 7,
+  );
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    return getLocalDateString(date);
+  });
+}
+
+export function getMonthYearLabel(date: TaskDate): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const label = new Intl.DateTimeFormat('ru-RU', {
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(year, month - 1, day, 12));
+  return label.charAt(0).toLocaleUpperCase('ru-RU') + label.slice(1);
+}
+
+export function getWeekdayShortName(date: TaskDate): string {
+  const day = new Date(`${date}T12:00:00`).getDay();
+  return WEEKDAY_SHORT_NAMES[(day + 6) % 7];
+}
+
+export function sortTasksByTime(tasks: readonly ITask[]): ITask[] {
+  return [...tasks].sort((first, second) => {
+    if (first.time === undefined) {
+      return second.time === undefined ? 0 : 1;
+    }
+
+    if (second.time === undefined) {
+      return -1;
+    }
+
+    return first.time.localeCompare(second.time);
+  });
 }
 
 export function getTasksForCurrentWeekday(

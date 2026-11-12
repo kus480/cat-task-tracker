@@ -1,15 +1,51 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { TaskCard } from './components/TaskCard';
 import { TaskForm } from './components/TaskForm';
 import { TaskStats } from './components/TaskStats';
 import { TaskProvider } from './context/TaskProvider';
 import { useTaskContext } from './hooks/useTaskContext';
-import type { TaskStatus } from './types/task';
-import type { CSSProperties } from 'react';
+import type { TaskDate, TaskStatus } from './types/task';
+import {
+  getLocalDateString,
+  getMonthYearLabel,
+  getTasksByDate,
+  getWeekDates,
+  getWeekdayName,
+  getWeekdayShortName,
+  sortTasksByTime,
+} from './utils/taskDate';
 import './App.css';
 
 function TaskTracker() {
   const { tasks, addTask, deleteTask, updateTaskStatus } = useTaskContext();
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedDate, setSelectedDate] = useState<TaskDate | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+
+  const today = getLocalDateString();
+  const weekDates = useMemo(
+    () => getWeekDates(new Date(), weekOffset),
+    [weekOffset],
+  );
+  const days = useMemo(
+    () =>
+      weekDates.map((date) => ({
+        date,
+        dayNumber: date.slice(-2),
+        weekdayName: getWeekdayName(date),
+        weekdayShortName: getWeekdayShortName(date),
+        tasks: sortTasksByTime(getTasksByDate(tasks, date)),
+      })),
+    [tasks, weekDates],
+  );
+  const selectedTasks = useMemo(
+    () =>
+      selectedDate === null
+        ? []
+        : sortTasksByTime(getTasksByDate(tasks, selectedDate)),
+    [selectedDate, tasks],
+  );
 
   const handleStatusChange = useCallback(
     (taskId: string, status: TaskStatus) => {
@@ -17,6 +53,17 @@ function TaskTracker() {
     },
     [updateTaskStatus],
   );
+
+  const selectDate = (date: TaskDate) => {
+    setSelectedDate(selectedDate === date ? null : date);
+    setIsFormOpen(false);
+  };
+
+  const changeWeek = (offset: number) => {
+    setWeekOffset((currentOffset) => currentOffset + offset);
+    setSelectedDate(null);
+    setIsFormOpen(false);
+  };
 
   return (
     <main
@@ -26,7 +73,7 @@ function TaskTracker() {
         maxWidth: 'none',
         minHeight: '100vh',
         margin: 0,
-        padding: '64px max(24px, calc((100% - 920px) / 2)) 80px',
+        padding: 'clamp(24px, 5vw, 64px) max(12px, calc((100% - 1120px) / 2)) 64px',
         boxSizing: 'border-box',
         background: '#FDFBF7',
         color: '#4A3E3D',
@@ -65,69 +112,149 @@ function TaskTracker() {
 
       <div className="workspace">
         <div className="overview-grid">
-        <section className="panel create-panel" aria-labelledby="create-heading">
-          <div className="section-heading">
-            <div>
-              <h2 id="create-heading">Новая задача</h2>
-              <p>Запишите то, что хотите сделать</p>
+          <section className="panel week-panel" aria-labelledby="week-heading">
+            <div className="section-heading week-heading">
+              <div>
+                <h2 id="week-heading">{getMonthYearLabel(weekDates[3])}</h2>
+                <p>План на неделю</p>
+              </div>
+              <div className="week-navigation">
+                <button
+                  type="button"
+                  aria-label="Предыдущая неделя"
+                  onClick={() => changeWeek(-1)}
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  aria-label="Следующая неделя"
+                  onClick={() => changeWeek(1)}
+                >
+                  ›
+                </button>
+              </div>
             </div>
-          </div>
-          <TaskForm onSubmit={addTask} />
-        </section>
 
-        <TaskStats />
+            <div className="week-days-grid" aria-label="Дни текущей недели">
+              {days.map((day) => (
+                <button
+                  key={day.date}
+                  type="button"
+                  className={[
+                    'week-day-card',
+                    day.date === today ? 'is-today' : '',
+                    selectedDate === day.date ? 'is-selected' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  aria-label={`${day.dayNumber} ${day.weekdayName}, ${day.tasks.length} задач`}
+                  aria-pressed={selectedDate === day.date}
+                  onClick={() => selectDate(day.date)}
+                >
+                  <span className="week-day-date">
+                    <strong>{day.dayNumber}</strong>
+                    <span>{day.weekdayShortName}</span>
+                  </span>
+                  {day.tasks.length === 0 ? (
+                    <span className="week-day-empty">Нет задач</span>
+                  ) : (
+                    <span className="week-day-task-list">
+                      {day.tasks.map((task) => (
+                        <span
+                          className="week-day-task"
+                          key={task.id}
+                          title={`${task.time ? `${task.time} ` : ''}${task.title}`}
+                        >
+                          <span aria-hidden="true">🧶</span>
+                          <span className="week-day-task-title">
+                            {task.title}
+                          </span>
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <TaskStats />
         </div>
 
-        <section className="panel tasks-panel" aria-labelledby="tasks-heading">
-          <div className="section-heading">
-            <div>
-              <h2 id="tasks-heading">Мои задачи</h2>
-              <p>Ваш список дел на сегодня</p>
-            </div>
-            <span className="task-count" aria-label={`Всего задач: ${tasks.length}`}>
-              {tasks.length}
-            </span>
-          </div>
-
-          {tasks.length === 0 ? (
-            <div className="empty-state">
-              <span className="empty-icon" aria-hidden="true">🐈ᶻᶻᶻ</span>
-              <h3>Котики сладко спят...</h3>
-              <p>Добавьте задачу, и они проснутся помочь вам с делами 🐾</p>
-            </div>
-          ) : (
-            <ul className="task-list">
-              {tasks.map((task) => (
-                <li key={task.id}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                    }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        flex: '0 0 auto',
-                        fontSize: '20px',
-                        filter: 'grayscale(0.7) sepia(0.45) saturate(0.65)',
-                      }}
-                    >
-                      🧶
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <TaskCard
-                        task={task}
-                        onDelete={deleteTask}
-                        onStatusChange={handleStatusChange}
-                      />
-                    </div>
+        <section
+          className={[
+            'selected-day-reveal',
+            selectedDate !== null ? 'is-open' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-hidden={selectedDate === null}
+          aria-label="Задачи выбранного дня"
+        >
+          <div className="selected-day-reveal-inner">
+            {selectedDate !== null && (
+              <div className="panel selected-day-panel">
+                <div className="section-heading selected-day-heading">
+                  <div>
+                    <h2>
+                      {getWeekdayName(selectedDate)}, {selectedDate}
+                    </h2>
+                    <p>
+                      {selectedTasks.length}{' '}
+                      {selectedTasks.length === 1
+                        ? 'задача'
+                        : selectedTasks.length >= 2 &&
+                            selectedTasks.length <= 4
+                          ? 'задачи'
+                          : 'задач'}
+                    </p>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
+                  <button
+                    className="selected-day-add"
+                    type="button"
+                    aria-label={
+                      isFormOpen ? 'Скрыть форму задачи' : 'Добавить задачу'
+                    }
+                    aria-expanded={isFormOpen}
+                    onClick={() => setIsFormOpen((isOpen) => !isOpen)}
+                  >
+                    {isFormOpen ? '×' : '+'}
+                  </button>
+                </div>
+
+                {isFormOpen && (
+                  <TaskForm
+                    key={selectedDate}
+                    date={selectedDate}
+                    onSubmit={addTask}
+                  />
+                )}
+
+                {selectedTasks.length === 0 ? (
+                  <div className="empty-state selected-day-empty">
+                    <span className="empty-icon" aria-hidden="true">
+                      🐈ᶻᶻᶻ
+                    </span>
+                    <h3>Пока нет задач</h3>
+                    <p>Нажмите «+», чтобы добавить задачу на этот день.</p>
+                  </div>
+                ) : (
+                  <ul className="task-list selected-day-task-list">
+                    {selectedTasks.map((task) => (
+                      <li key={task.id}>
+                        <TaskCard
+                          task={task}
+                          onDelete={deleteTask}
+                          onStatusChange={handleStatusChange}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
         </section>
       </div>
     </main>

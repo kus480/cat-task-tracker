@@ -1,12 +1,15 @@
 import { useMemo } from 'react';
 import { useTaskContext } from '../hooks/useTaskContext';
+import { getLocalDateString } from '../utils/taskDate';
 
 export function TaskStats() {
   const { tasks } = useTaskContext();
+  const today = getLocalDateString();
 
   const stats = useMemo(() => {
-    const completed = tasks.filter((task) => task.completed).length;
-    const total = tasks.length;
+    const todayTasks = tasks.filter((task) => task.date === today);
+    const completed = todayTasks.filter((task) => task.completed).length;
+    const total = todayTasks.length;
 
     return {
       completed,
@@ -14,7 +17,7 @@ export function TaskStats() {
       completionPercentage:
         total === 0 ? 0 : Math.round((completed / total) * 100),
     };
-  }, [tasks]);
+  }, [tasks, today]);
 
   return (
     <section className="stats-grid" aria-label="Статистика задач">

@@ -28,6 +28,7 @@ export const TaskCard = memo(function TaskCard({
         <h3>{task.title}</h3>
         {task.description && <p className="task-description">{task.description}</p>}
         <p className="task-meta">
+          {task.time && <span>{task.time} · </span>}
           Добавлена {new Date(task.createdAt).toLocaleDateString('ru-RU')}
         </p>
       </div>
