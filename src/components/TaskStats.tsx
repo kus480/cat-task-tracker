@@ -5,7 +5,7 @@ export function TaskStats() {
   const { tasks } = useTaskContext();
 
   const stats = useMemo(() => {
-    const completed = tasks.filter((task) => task.status === 'done').length;
+    const completed = tasks.filter((task) => task.completed).length;
     const total = tasks.length;
 
     return {

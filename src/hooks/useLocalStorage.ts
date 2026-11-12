@@ -3,6 +3,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 export function useLocalStorage<T>(
   key: string,
   initialValue: T,
+  deserialize?: (value: unknown) => T,
 ): [T, Dispatch<SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => {
     if (typeof window === 'undefined') {
@@ -10,7 +11,12 @@ export function useLocalStorage<T>(
     }
 
     const storedValue = window.localStorage.getItem(key);
-    return storedValue === null ? initialValue : (JSON.parse(storedValue) as T);
+    if (storedValue === null) {
+      return initialValue;
+    }
+
+    const parsedValue: unknown = JSON.parse(storedValue);
+    return deserialize ? deserialize(parsedValue) : (parsedValue as T);
   });
 
   useEffect(() => {
