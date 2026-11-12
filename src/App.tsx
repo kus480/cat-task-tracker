@@ -14,12 +14,15 @@ import { useTaskContext } from './hooks/useTaskContext';
 import type { TaskDate, TaskStatus } from './types/task';
 import {
   getLocalDateString,
+  getMonthDates,
   getMonthYearLabel,
   getShortDateLabel,
   getTasksByDate,
   getWeekDates,
+  getWeekOffsetForDate,
   getWeekdayName,
   getWeekdayShortName,
+  shiftMonth,
   sortTasksByTime,
 } from './utils/taskDate';
 import './App.css';
@@ -27,6 +30,10 @@ import './App.css';
 function TaskTracker() {
   const { tasks, addTask, deleteTask, updateTaskStatus } = useTaskContext();
   const [weekOffset, setWeekOffset] = useState(0);
+  const [monthDate, setMonthDate] = useState<TaskDate>(() =>
+    getLocalDateString(),
+  );
+  const [isMonthExpanded, setIsMonthExpanded] = useState(false);
   const [selectedDate, setSelectedDate] = useState<TaskDate | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({
@@ -43,6 +50,7 @@ function TaskTracker() {
     () => getWeekDates(new Date(), weekOffset),
     [weekOffset],
   );
+  const monthDates = useMemo(() => getMonthDates(monthDate), [monthDate]);
   const days = useMemo(
     () =>
       weekDates.map((date) => ({
@@ -70,14 +78,23 @@ function TaskTracker() {
   );
 
   const selectDate = (date: TaskDate) => {
+    setWeekOffset(getWeekOffsetForDate(date));
+    setMonthDate(shiftMonth(date, 0));
     setSelectedDate((currentDate) => (currentDate === date ? null : date));
     setIsCreateOpen(false);
   };
 
-  const changeWeek = (offset: number) => {
-    setWeekOffset((currentOffset) => currentOffset + offset);
-    setSelectedDate(null);
-    setIsCreateOpen(false);
+  const changeMonth = (offset: number) => {
+    const nextMonth = shiftMonth(monthDate, offset);
+    setMonthDate(nextMonth);
+  };
+
+  const toggleCalendarView = () => {
+    if (isMonthExpanded) {
+      setWeekOffset(0);
+    }
+
+    setIsMonthExpanded((isExpanded) => !isExpanded);
   };
 
   const closePopover = () => {
@@ -215,75 +232,171 @@ function TaskTracker() {
           <section className="panel week-panel" aria-labelledby="week-heading">
             <div className="section-heading week-heading">
               <div>
-                <h2 id="week-heading">{getMonthYearLabel(weekDates[3])}</h2>
+                <h2 id="week-heading">
+                  {getMonthYearLabel(
+                    isMonthExpanded ? monthDate : weekDates[3],
+                  )}
+                </h2>
                 <p>План на неделю</p>
               </div>
-              <div className="week-navigation">
-                <button
-                  type="button"
-                  aria-label="Предыдущая неделя"
-                  onClick={() => changeWeek(-1)}
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  aria-label="Следующая неделя"
-                  onClick={() => changeWeek(1)}
-                >
-                  ›
-                </button>
-              </div>
+              {isMonthExpanded && (
+                <div className="week-navigation month-navigation">
+                  <button
+                    type="button"
+                    aria-label="Предыдущий месяц"
+                    onClick={() => changeMonth(-1)}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Следующий месяц"
+                    onClick={() => changeMonth(1)}
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="week-days-grid" aria-label="Дни текущей недели">
-              {days.map((day) => (
-                <button
-                  key={day.date}
-                  type="button"
-                  className={[
-                    'week-day-card',
-                    day.date === today ? 'is-today' : '',
-                    selectedDate === day.date ? 'is-selected' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  aria-label={`${day.dayNumber} ${day.weekdayName}, ${day.tasks.length} задач`}
-                  aria-pressed={selectedDate === day.date}
-                  ref={(element) => {
-                    if (element) {
-                      dayButtonRefs.current.set(day.date, element);
-                    } else {
-                      dayButtonRefs.current.delete(day.date);
-                    }
-                  }}
-                  onClick={() => selectDate(day.date)}
-                >
-                  <span className="week-day-date">
-                    <strong>{day.dayNumber}</strong>
-                    <span>{day.weekdayShortName}</span>
-                  </span>
-                  {day.tasks.length === 0 ? (
-                    <span className="week-day-empty">Нет задач</span>
-                  ) : (
-                    <span className="week-day-task-list">
-                      {day.tasks.map((task) => (
-                        <span
-                          className="week-day-task"
-                          key={task.id}
-                          title={`${task.time ? `${task.time} ` : ''}${task.title}`}
-                        >
-                          <span aria-hidden="true">🧶</span>
-                          <span className="week-day-task-title">
-                            {task.title}
-                          </span>
-                        </span>
-                      ))}
+            {!isMonthExpanded ? (
+              <div className="week-days-grid" aria-label="Дни текущей недели">
+                {days.map((day) => (
+                  <button
+                    key={day.date}
+                    type="button"
+                    className={[
+                      'week-day-card',
+                      day.date === today ? 'is-today' : '',
+                      selectedDate === day.date ? 'is-selected' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    aria-label={`${day.dayNumber} ${day.weekdayName}, ${day.tasks.length} задач`}
+                    aria-pressed={selectedDate === day.date}
+                    ref={(element) => {
+                      if (element) {
+                        dayButtonRefs.current.set(day.date, element);
+                      } else {
+                        dayButtonRefs.current.delete(day.date);
+                      }
+                    }}
+                    onClick={() => selectDate(day.date)}
+                  >
+                    <span className="week-day-date">
+                      <strong>{day.dayNumber}</strong>
+                      <span>{day.weekdayShortName}</span>
                     </span>
+                    {day.tasks.length === 0 ? (
+                      <span className="week-day-empty">Нет задач</span>
+                    ) : (
+                      <span className="week-day-task-list">
+                        {day.tasks.slice(0, 3).map((task) => (
+                          <span
+                            className="week-day-task"
+                            key={task.id}
+                            title={`${task.time ? `${task.time} ` : ''}${task.title}`}
+                          >
+                            <span aria-hidden="true">🧶</span>
+                            <span className="week-day-task-title">
+                              {task.title}
+                            </span>
+                          </span>
+                        ))}
+                        {day.tasks.length > 3 && (
+                          <span className="calendar-task-overflow">
+                            +{day.tasks.length - 3}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="month-calendar" aria-label="Календарь на месяц">
+                <div className="month-weekdays" aria-hidden="true">
+                  {['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'].map(
+                    (weekday) => (
+                      <span key={weekday}>{weekday}</span>
+                    ),
                   )}
-                </button>
-              ))}
-            </div>
+                </div>
+                <div className="month-days-grid">
+                  {monthDates.map((date) => {
+                    const dateTasks = sortTasksByTime(
+                      getTasksByDate(tasks, date),
+                    );
+                    const isCurrentMonth =
+                      date.slice(0, 7) === monthDate.slice(0, 7);
+                    const dayNumber = date.slice(-2);
+
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        className={[
+                          'month-day-card',
+                          isCurrentMonth ? '' : 'is-outside-month',
+                          date === today ? 'is-today' : '',
+                          selectedDate === date ? 'is-selected' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        aria-label={`${dayNumber} ${getWeekdayName(date)}, ${dateTasks.length} задач`}
+                        aria-pressed={selectedDate === date}
+                        ref={(element) => {
+                          if (element) {
+                            dayButtonRefs.current.set(date, element);
+                          } else {
+                            dayButtonRefs.current.delete(date);
+                          }
+                        }}
+                        onClick={() => selectDate(date)}
+                      >
+                        <span className="month-day-number">{dayNumber}</span>
+                        <span className="month-day-task-list">
+                          {dateTasks.slice(0, 3).map((task) => (
+                            <span
+                              className="month-day-task"
+                              key={task.id}
+                              title={`${task.time ? `${task.time} ` : ''}${task.title}`}
+                            >
+                              <span aria-hidden="true">🧶</span>
+                              <span className="month-day-task-title">
+                                {task.title}
+                              </span>
+                            </span>
+                          ))}
+                          {dateTasks.length > 3 && (
+                            <span className="calendar-task-overflow">
+                              +{dateTasks.length - 3}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <button
+              className="calendar-view-toggle"
+              type="button"
+              aria-label={
+                isMonthExpanded
+                  ? 'Свернуть календарь до недели'
+                  : 'Развернуть календарь на месяц'
+              }
+              aria-expanded={isMonthExpanded}
+              onClick={toggleCalendarView}
+            >
+              <span
+                className={`calendar-view-chevron${isMonthExpanded ? ' is-expanded' : ''}`}
+                aria-hidden="true"
+              />
+            </button>
           </section>
 
           <TaskStats />

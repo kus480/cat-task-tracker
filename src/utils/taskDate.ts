@@ -100,6 +100,51 @@ export function getWeekDates(
   });
 }
 
+export function getMonthDates(date: TaskDate): TaskDate[] {
+  getDateParts(date);
+  const firstOfMonth = createLocalDate(date);
+  firstOfMonth.setDate(1);
+
+  const firstVisibleDay = new Date(firstOfMonth);
+  firstVisibleDay.setDate(
+    firstVisibleDay.getDate() - ((firstVisibleDay.getDay() + 6) % 7),
+  );
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const calendarDate = new Date(firstVisibleDay);
+    calendarDate.setDate(firstVisibleDay.getDate() + index);
+    return getLocalDateString(calendarDate);
+  });
+}
+
+export function shiftMonth(date: TaskDate, monthOffset: number): TaskDate {
+  const result = createLocalDate(date);
+  result.setDate(1);
+  result.setMonth(result.getMonth() + monthOffset);
+  return getLocalDateString(result);
+}
+
+export function getWeekOffsetForDate(
+  date: TaskDate,
+  referenceDate: Date = new Date(),
+): number {
+  const targetDate = createLocalDate(date);
+  const referenceMonday = new Date(referenceDate);
+  referenceMonday.setHours(12, 0, 0, 0);
+  referenceMonday.setDate(
+    referenceMonday.getDate() - ((referenceMonday.getDay() + 6) % 7),
+  );
+  const targetMonday = new Date(targetDate);
+  targetMonday.setDate(
+    targetMonday.getDate() - ((targetMonday.getDay() + 6) % 7),
+  );
+
+  return Math.round(
+    (targetMonday.getTime() - referenceMonday.getTime()) /
+      (7 * 24 * 60 * 60 * 1000),
+  );
+}
+
 export function getMonthYearLabel(date: TaskDate): string {
   const [year, month, day] = date.split('-').map(Number);
   const label = new Intl.DateTimeFormat('ru-RU', {
