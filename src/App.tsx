@@ -1,6 +1,12 @@
-import { useCallback, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties } from 'react';
-import { TaskCard } from './components/TaskCard';
 import { TaskForm } from './components/TaskForm';
 import { TaskStats } from './components/TaskStats';
 import { TaskProvider } from './context/TaskProvider';
@@ -9,6 +15,7 @@ import type { TaskDate, TaskStatus } from './types/task';
 import {
   getLocalDateString,
   getMonthYearLabel,
+  getShortDateLabel,
   getTasksByDate,
   getWeekDates,
   getWeekdayName,
@@ -21,7 +28,15 @@ function TaskTracker() {
   const { tasks, addTask, deleteTask, updateTaskStatus } = useTaskContext();
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState<TaskDate | null>(null);
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [popoverPosition, setPopoverPosition] = useState({
+    left: 12,
+    top: 100,
+    arrowLeft: 24,
+    placement: 'below' as 'above' | 'below',
+  });
+  const dayButtonRefs = useRef(new Map<TaskDate, HTMLButtonElement>());
+  const popoverRef = useRef<HTMLElement>(null);
 
   const today = getLocalDateString();
   const weekDates = useMemo(
@@ -55,15 +70,100 @@ function TaskTracker() {
   );
 
   const selectDate = (date: TaskDate) => {
-    setSelectedDate(selectedDate === date ? null : date);
-    setIsFormOpen(false);
+    setSelectedDate((currentDate) => (currentDate === date ? null : date));
+    setIsCreateOpen(false);
   };
 
   const changeWeek = (offset: number) => {
     setWeekOffset((currentOffset) => currentOffset + offset);
     setSelectedDate(null);
-    setIsFormOpen(false);
+    setIsCreateOpen(false);
   };
+
+  const closePopover = () => {
+    setSelectedDate(null);
+    setIsCreateOpen(false);
+  };
+
+  const handleAddTask = (task: Parameters<typeof addTask>[0]) => {
+    addTask(task);
+    setIsCreateOpen(false);
+  };
+
+  useLayoutEffect(() => {
+    if (selectedDate === null) {
+      return;
+    }
+
+    const updatePopoverPosition = () => {
+      const anchor = dayButtonRefs.current.get(selectedDate);
+      const popover = popoverRef.current;
+      if (!anchor || !popover) {
+        return;
+      }
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const popoverRect = popover.getBoundingClientRect();
+      const horizontalPadding = 12;
+      const left = Math.min(
+        Math.max(horizontalPadding, anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2),
+        window.innerWidth - popoverRect.width - horizontalPadding,
+      );
+      const belowTop = anchorRect.bottom + 12;
+      const canPlaceBelow =
+        belowTop + popoverRect.height <= window.innerHeight - horizontalPadding;
+      const top = canPlaceBelow
+        ? belowTop
+        : Math.max(horizontalPadding, anchorRect.top - popoverRect.height - 12);
+
+      setPopoverPosition({
+        left,
+        top,
+        arrowLeft: Math.min(
+          Math.max(18, anchorRect.left + anchorRect.width / 2 - left - 10),
+          popoverRect.width - 30,
+        ),
+        placement: canPlaceBelow ? 'below' : 'above',
+      });
+    };
+
+    updatePopoverPosition();
+    window.addEventListener('resize', updatePopoverPosition);
+    window.addEventListener('scroll', updatePopoverPosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePopoverPosition);
+      window.removeEventListener('scroll', updatePopoverPosition, true);
+    };
+  }, [selectedDate, selectedTasks.length]);
+
+  useEffect(() => {
+    if (selectedDate === null) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      if (isCreateOpen) {
+        setIsCreateOpen(false);
+      } else {
+        setSelectedDate(null);
+        setIsCreateOpen(false);
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isCreateOpen, selectedDate]);
 
   return (
     <main
@@ -150,6 +250,13 @@ function TaskTracker() {
                     .join(' ')}
                   aria-label={`${day.dayNumber} ${day.weekdayName}, ${day.tasks.length} задач`}
                   aria-pressed={selectedDate === day.date}
+                  ref={(element) => {
+                    if (element) {
+                      dayButtonRefs.current.set(day.date, element);
+                    } else {
+                      dayButtonRefs.current.delete(day.date);
+                    }
+                  }}
                   onClick={() => selectDate(day.date)}
                 >
                   <span className="week-day-date">
@@ -182,81 +289,165 @@ function TaskTracker() {
           <TaskStats />
         </div>
 
-        <section
-          className={[
-            'selected-day-reveal',
-            selectedDate !== null ? 'is-open' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          aria-hidden={selectedDate === null}
-          aria-label="Задачи выбранного дня"
-        >
-          <div className="selected-day-reveal-inner">
-            {selectedDate !== null && (
-              <div className="panel selected-day-panel">
-                <div className="section-heading selected-day-heading">
-                  <div>
-                    <h2>
-                      {getWeekdayName(selectedDate)}, {selectedDate}
-                    </h2>
-                    <p>
-                      {selectedTasks.length}{' '}
-                      {selectedTasks.length === 1
-                        ? 'задача'
-                        : selectedTasks.length >= 2 &&
-                            selectedTasks.length <= 4
-                          ? 'задачи'
-                          : 'задач'}
-                    </p>
-                  </div>
-                  <button
-                    className="selected-day-add"
-                    type="button"
-                    aria-label={
-                      isFormOpen ? 'Скрыть форму задачи' : 'Добавить задачу'
-                    }
-                    aria-expanded={isFormOpen}
-                    onClick={() => setIsFormOpen((isOpen) => !isOpen)}
-                  >
-                    {isFormOpen ? '×' : '+'}
-                  </button>
-                </div>
-
-                {isFormOpen && (
-                  <TaskForm
-                    key={selectedDate}
-                    date={selectedDate}
-                    onSubmit={addTask}
-                  />
-                )}
-
-                {selectedTasks.length === 0 ? (
-                  <div className="empty-state selected-day-empty">
-                    <span className="empty-icon" aria-hidden="true">
-                      🐈ᶻᶻᶻ
-                    </span>
-                    <h3>Пока нет задач</h3>
-                    <p>Нажмите «+», чтобы добавить задачу на этот день.</p>
-                  </div>
-                ) : (
-                  <ul className="task-list selected-day-task-list">
-                    {selectedTasks.map((task) => (
-                      <li key={task.id}>
-                        <TaskCard
-                          task={task}
-                          onDelete={deleteTask}
-                          onStatusChange={handleStatusChange}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
       </div>
+
+      {selectedDate !== null && (
+        <div
+          className="day-popover-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closePopover();
+            }
+          }}
+        >
+          <section
+            ref={popoverRef}
+            className={`day-popover is-${popoverPosition.placement}`}
+            style={
+              {
+                left: `${popoverPosition.left}px`,
+                top: `${popoverPosition.top}px`,
+                '--popover-arrow-left': `${popoverPosition.arrowLeft}px`,
+              } as CSSProperties
+            }
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="day-popover-heading"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="day-popover-header">
+              <div>
+                <h2 id="day-popover-heading">
+                  {getShortDateLabel(selectedDate)}
+                </h2>
+                <p>
+                  {selectedTasks.length}{' '}
+                  {selectedTasks.length === 1
+                    ? 'задача'
+                    : selectedTasks.length >= 2 && selectedTasks.length <= 4
+                      ? 'задачи'
+                      : 'задач'}
+                </p>
+              </div>
+              <button
+                className="layer-close-button"
+                type="button"
+                aria-label="Закрыть список задач"
+                onClick={closePopover}
+              >
+                ×
+              </button>
+            </header>
+
+            {selectedTasks.length === 0 ? (
+              <div className="day-popover-empty">
+                <span aria-hidden="true">🐈ᶻᶻᶻ</span>
+                <p>Пока нет задач на этот день</p>
+              </div>
+            ) : (
+              <ul className="day-popover-list">
+                {selectedTasks.map((task) => {
+                  const isComplete =
+                    task.completed || task.status === 'done';
+
+                  return (
+                    <li className="day-popover-task" key={task.id}>
+                      <button
+                        className={`task-complete-toggle${isComplete ? ' is-complete' : ''}`}
+                        type="button"
+                        aria-label={
+                          isComplete
+                            ? `Вернуть задачу «${task.title}» к выполнению`
+                            : `Отметить задачу «${task.title}» выполненной`
+                        }
+                        aria-pressed={isComplete}
+                        onClick={() =>
+                          handleStatusChange(
+                            task.id,
+                            isComplete ? 'todo' : 'done',
+                          )
+                        }
+                      >
+                        {isComplete ? '✓' : '🧶'}
+                      </button>
+                      <span
+                        className={`day-popover-task-title${isComplete ? ' is-complete' : ''}`}
+                        title={task.title}
+                      >
+                        {task.title}
+                      </span>
+                      <span className="day-popover-task-time">
+                        {task.time || '—'}
+                      </span>
+                      <button
+                        className="day-popover-delete"
+                        type="button"
+                        aria-label={`Удалить задачу «${task.title}»`}
+                        onClick={() => deleteTask(task.id)}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <button
+              className="day-popover-add"
+              type="button"
+              onClick={() => setIsCreateOpen(true)}
+            >
+              <span aria-hidden="true">+</span>
+              Добавить задачу
+            </button>
+          </section>
+        </div>
+      )}
+
+      {selectedDate !== null && isCreateOpen && (
+        <div
+          className="task-modal-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsCreateOpen(false);
+            }
+          }}
+        >
+          <section
+            className="task-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="task-modal-heading"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="task-modal-header">
+              <div>
+                <p>Новая задача</p>
+                <h2 id="task-modal-heading">
+                  {getShortDateLabel(selectedDate)}
+                </h2>
+              </div>
+              <button
+                className="layer-close-button"
+                type="button"
+                aria-label="Отменить добавление задачи"
+                onClick={() => setIsCreateOpen(false)}
+              >
+                ×
+              </button>
+            </header>
+            <TaskForm
+              key={selectedDate}
+              className="task-modal-form"
+              date={selectedDate}
+              onSubmit={handleAddTask}
+              submitLabel="Сохранить задачу"
+              autoFocus
+            />
+          </section>
+        </div>
+      )}
     </main>
   );
 }

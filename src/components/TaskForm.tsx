@@ -4,9 +4,18 @@ import type { CreateTaskDto, TaskDate } from '../types/task';
 interface TaskFormProps {
   onSubmit: (task: CreateTaskDto) => void;
   date?: TaskDate;
+  submitLabel?: string;
+  className?: string;
+  autoFocus?: boolean;
 }
 
-export function TaskForm({ onSubmit, date }: TaskFormProps) {
+export function TaskForm({
+  onSubmit,
+  date,
+  submitLabel = 'Добавить задачу',
+  className,
+  autoFocus = false,
+}: TaskFormProps) {
   const [title, setTitle] = useState('');
   const [time, setTime] = useState('');
   const [description, setDescription] = useState('');
@@ -37,7 +46,7 @@ export function TaskForm({ onSubmit, date }: TaskFormProps) {
 
   return (
     <form
-      className="task-form"
+      className={['task-form', className].filter(Boolean).join(' ')}
       onSubmit={handleSubmit}
       style={{
         padding: 0,
@@ -48,7 +57,7 @@ export function TaskForm({ onSubmit, date }: TaskFormProps) {
       }}
     >
       <label className="form-field">
-        Название
+        <span>Название</span>
         <input
           type="text"
           value={title}
@@ -56,11 +65,14 @@ export function TaskForm({ onSubmit, date }: TaskFormProps) {
           placeholder="Например, подготовить отчёт"
           maxLength={120}
           required
+          autoFocus={autoFocus}
         />
       </label>
 
       <label className="form-field">
-        Время <span aria-hidden="true">(необязательно)</span>
+        <span>
+          Время <span aria-hidden="true">(необязательно)</span>
+        </span>
         <input
           type="time"
           value={time}
@@ -69,7 +81,9 @@ export function TaskForm({ onSubmit, date }: TaskFormProps) {
       </label>
 
       <label className="form-field">
-        Описание <span aria-hidden="true">(необязательно)</span>
+        <span>
+          Описание <span aria-hidden="true">(необязательно)</span>
+        </span>
         <textarea
           value={description}
           onChange={(event) => setDescription(event.target.value)}
@@ -88,7 +102,7 @@ export function TaskForm({ onSubmit, date }: TaskFormProps) {
         }}
       >
         <span className="button-plus" aria-hidden="true">+</span>
-        Добавить задачу
+        {submitLabel}
       </button>
     </form>
   );

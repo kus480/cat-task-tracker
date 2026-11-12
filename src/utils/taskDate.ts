@@ -114,6 +114,16 @@ export function getWeekdayShortName(date: TaskDate): string {
   return WEEKDAY_SHORT_NAMES[(day + 6) % 7];
 }
 
+export function getShortDateLabel(date: TaskDate): string {
+  const label = new Intl.DateTimeFormat('ru-RU', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(createLocalDate(date));
+
+  return label.charAt(0).toLocaleUpperCase('ru-RU') + label.slice(1);
+}
+
 export function sortTasksByTime(tasks: readonly ITask[]): ITask[] {
   return [...tasks].sort((first, second) => {
     if (first.time === undefined) {
